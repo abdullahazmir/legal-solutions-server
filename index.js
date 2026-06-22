@@ -1,7 +1,7 @@
 require("dotenv").config();
 const cors = require("cors");
 const express = require("express");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -23,22 +23,32 @@ async function run() {
     await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB!");
 
-    const database = client.db("legal-solutions-db");
-    const casesCollection    = database.collection("cases");
-    const lawfirmCollection  = database.collection("lawfirms");
+    const database         = client.db("legal-solutions-db");
+    const casesCollection  = database.collection("cases");
+    const lawfirmCollection = database.collection("lawfirms");
+    const usersCollection    = database.collection("user");
 
-    app.get("/", (req, res) => {
-      res.send("Server is running!");
+    app.get('/api/users', async (req, res) => {
+        const cursor = usersCollection.find({});
+        const result = await cursor.toArray();  
+        res.json(result);
     });
 
-    // GET /api/cases — supports ?lawfirmId=, ?lawyerId=, ?status=, or no filter (returns all)
+    app.get('/api/lawfirms', async (req, res) => {
+        const cursor = lawfirmCollection.find({}).skip(1);
+        const result = await cursor.toArray();  
+        res.json(result);
+    });
+
+    app.get("/", (req, res) => res.send("Server is running!"));
+
+    // ── CASES ──────────────────────────────────────────
     app.get("/api/cases", async (req, res) => {
       try {
         const query = {};
         if (req.query.lawfirmId) query.lawfirmId = req.query.lawfirmId;
         if (req.query.lawyerId)  query.lawyerId  = req.query.lawyerId;
         if (req.query.status)    query.status    = req.query.status;
-        // No filters = return all cases
         const result = await casesCollection.find(query).toArray();
         res.json(result);
       } catch (err) {
@@ -47,21 +57,31 @@ async function run() {
       }
     });
 
-    // POST /api/cases
+//     app.post('/api/jobs', async (req, res) => {
+//     const job = req.body;
+//     const newJob = {
+//         ...job,
+//         createdAt: new Date()
+//     }
+//     const result = await jobCollection.insertOne(newJob);
+//     res.send(result);
+// });
+
     app.post("/api/cases", async (req, res) => {
-      try {
-        const result = await casesCollection.insertOne(req.body);
-        res.json(result);
-      } catch (err) {
-        console.error("POST /api/cases error:", err);
-        res.status(500).json({ error: "Failed to create case" });
-      }
+
+        const cases =req.body;
+        const newCase = {
+            ...cases,
+            createdAt: new Date()
+        }
+        const result = await casesCollection.insertOne(newCase);
+        res.send(result);
     });
 
-    // DELETE /api/cases/:id
+    
+
     app.delete("/api/cases/:id", async (req, res) => {
       try {
-        const { ObjectId } = require("mongodb");
         const result = await casesCollection.deleteOne({
           _id: new ObjectId(req.params.id),
         });
@@ -72,25 +92,31 @@ async function run() {
       }
     });
 
-    // GET /api/lawfirms
+    // ── LAWFIRMS ───────────────────────────────────────
+    // ✅ GET with lawyerId filter — this is what the page calls
     app.get("/api/lawfirms", async (req, res) => {
       try {
-        const result = await lawfirmCollection.find({}).toArray();
-        res.json(result);
+        const query = {};
+        if (req.query.lawyerId) query.lawyerId = req.query.lawyerId;
+        const result = await lawfirmCollection.find(query).toArray();
+        res.json(result); // always returns JSON array (may be empty [])
       } catch (err) {
+        console.error("GET /api/lawfirms error:", err);
         res.status(500).json({ error: "Failed to fetch lawfirms" });
       }
     });
 
-    // POST /api/lawfirms
+    // ✅ Single POST — duplicate removed
     app.post("/api/lawfirms", async (req, res) => {
-      try {
-        const result = await lawfirmCollection.insertOne(req.body);
-        res.json(result);
-      } catch (err) {
-        res.status(500).json({ error: "Failed to create lawfirm" });
-      }
+      const lawfirm = req.body;
+      const newLawfirm = {
+        ...lawfirm,
+        createdAt: new Date(),
+      };
+      const result = await lawfirmCollection.insertOne(newLawfirm);
+      res.send(result);
     });
+
 
   } finally {
     // await client.close();
