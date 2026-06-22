@@ -78,6 +78,20 @@ async function run() {
         res.send(result);
     });
 
+    // Add this in your backend after GET /api/cases
+app.get("/api/cases/:id", async (req, res) => {
+  try {
+    const result = await casesCollection.findOne({
+      _id: new ObjectId(req.params.id),
+    });
+    if (!result) return res.status(404).json({ error: "Case not found" });
+    res.json(result);
+  } catch (err) {
+    console.error("GET /api/cases/:id error:", err);
+    res.status(500).json({ error: "Failed to fetch case" });
+  }
+});
+
     
 
     app.delete("/api/cases/:id", async (req, res) => {
