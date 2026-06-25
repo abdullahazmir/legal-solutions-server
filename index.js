@@ -214,7 +214,7 @@ const client = new MongoClient(process.env.MONGO_DB_URI, {
 
         res.json({ subscriptionResult: result, userUpdate: updatedResult });
       }
-// 
+
  catch (err) {
         console.error("POST /api/subscriptions error:", err);
         res.status(500).json({ error: "Failed to create subscription" });
@@ -232,4 +232,4 @@ app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
 
-module.export= app;
+module.exports= app;
