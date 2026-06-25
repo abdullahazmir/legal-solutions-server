@@ -123,6 +123,20 @@ async function run() {
       }
     });
 
+
+    app.patch('/api/lawfirms/:id', async (req, res)=>{
+      const id = req.params.id;
+      const updatedLawFirm = req.body;
+      const filter={_id: new ObjectId(id)}
+      const updatedDoc= {
+        $set: {
+          status: updatedLawFirm.status
+        }
+      }
+      const result = await lawfirmCollection.updateOne(filter,updatedDoc)
+      res.send(result);
+    })
+
     // ── APPLICATIONS ───────────────────────────────────────────────────────
     app.get("/api/applications", async (req, res) => {
       try {
