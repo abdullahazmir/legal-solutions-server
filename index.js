@@ -17,11 +17,16 @@ const client = new MongoClient(process.env.MONGO_DB_URI, {
   },
 });
 
-async function run() {
-  try {
-    await client.connect();
-    await client.db("admin").command({ ping: 1 });
-    console.log("Connected to MongoDB!");
+// async function run() {
+//   try {
+//     await client.connect();
+
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Connected to MongoDB!");
+
+    client.connect(()=>{
+      console.log('another way to connect to mongoDB')
+    }).catch(console.dir)
 
     const database             = client.db("legal-solutions-db");
     const casesCollection      = database.collection("cases");
@@ -208,19 +213,23 @@ async function run() {
         console.log(`Plan updated for ${email} → ${planId}`, updatedResult);
 
         res.json({ subscriptionResult: result, userUpdate: updatedResult });
-      } catch (err) {
+      }
+// 
+ catch (err) {
         console.error("POST /api/subscriptions error:", err);
         res.status(500).json({ error: "Failed to create subscription" });
       }
     });
 
-  } finally {
-    // await client.close();
-  }
-}
+//   } finally {
+//     // await client.close();
+//   }
+// }
 
-run().catch(console.dir);
+// run().catch(console.dir);
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
+module.export= app;
