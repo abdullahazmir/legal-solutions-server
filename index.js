@@ -42,7 +42,8 @@ const usersCollection = database.collection("user");
 const applicationsCollection = database.collection("applications");
 const plansCollection = database.collection("plans");
 const subscriptionCollection = database.collection("subscriptions");
-const sessionCollection = database.collection("session")
+const sessionCollection = database.collection("session");
+const saveCasesCollection = database.collection("savecases")
 
 // verification...................
 
@@ -275,35 +276,63 @@ app.post("/api/subscriptions", async (req, res) => {
   try {
     const { email, planId } = req.body;
 
-    // 1. Save subscription record
     const result = await subscriptionCollection.insertOne({
       ...req.body,
       createdAt: new Date(),
     });
 
-    // 2. ✅ Update user's plan — was using data.info (wrong), now data.email
     const updatedResult = await usersCollection.updateOne(
-      { email: email },          // ← fixed: was { email: data.info }
+      { email: email },
       { $set: { plan: planId } }
     );
 
-    console.log(`Plan updated for ${email} → ${planId}`, updatedResult);
-
     res.json({ subscriptionResult: result, userUpdate: updatedResult });
-  }
-
-  catch (err) {
+  } catch (err) {
     console.error("POST /api/subscriptions error:", err);
     res.status(500).json({ error: "Failed to create subscription" });
   }
+});   // ← subscriptions closes here
+
+// ── SAVE CASES ─────────────────────────────────────────────────────────
+app.post("/api/savecases", verifyToken, verifyClient, async (req, res) => {
+  try {
+    const { caseId, name, specialization, location, consultationFee, currency, photoUrl, availability } = req.body;
+
+    const existing = await saveCasesCollection.findOne({
+      caseId,
+      userId: req.user._id.toString()
+    });
+    if (existing) return res.status(409).json({ error: "Already saved" });
+
+    const result = await saveCasesCollection.insertOne({
+      caseId,
+      userId: req.user._id.toString(),
+      name,
+      specialization,
+      location,
+      consultationFee,
+      currency,
+      photoUrl,
+      availability,
+      savedAt: new Date(),
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to save case" });
+  }
 });
 
-//   } finally {
-//     // await client.close();
-//   }
-// }
-
-// run().catch(console.dir);
+app.get("/api/savecases", verifyToken, verifyClient, async (req, res) => {
+  try {
+    const result = await saveCasesCollection.find({
+      userId: req.user._id.toString()
+    }).toArray();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch saved cases" });
+  }
+});
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
