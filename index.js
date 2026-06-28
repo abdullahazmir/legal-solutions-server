@@ -1,6 +1,7 @@
 require("dotenv").config();
 const cors = require("cors");
 const express = require("express");
+
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
@@ -9,7 +10,7 @@ const port = process.env.PORT || 5000;
 // app.use(cors());
 
 const allowedOrigins = [
-  
+
   'https://legal-solutions-client.vercel.app',
   'http://localhost:3000'
 ];
@@ -42,6 +43,11 @@ const client = new MongoClient(process.env.MONGO_DB_URI, {
   },
 });
 
+
+// routes/cases.js
+
+
+
 // async function run() {
 //   try {
 //     await client.connect();
@@ -63,6 +69,11 @@ const subscriptionCollection = database.collection("subscriptions");
 const sessionCollection = database.collection("session");
 const saveCasesCollection = database.collection("savecases")
 
+db.user.updateMany(
+  { role: "user" },
+  { $set: { role: "client" } }
+)
+
 // verification...................
 
 const verifyToken = async (req, res, next) => {
@@ -78,7 +89,7 @@ const verifyToken = async (req, res, next) => {
   const query = { token: token }
   const session = await sessionCollection.findOne(query);
 
-   if (!session) {
+  if (!session) {
     return res.status(401).send({ message: 'unauthorized access' })
   }
 
@@ -89,7 +100,7 @@ const verifyToken = async (req, res, next) => {
   }
   const user = await usersCollection.findOne(userQuery)
 
-   if (!user) {
+  if (!user) {
     return res.status(401).send({ message: 'unauthorized access' })
   }
   req.user = user
@@ -138,8 +149,49 @@ app.get("/api/users", async (req, res) => {
 
 // ── CASES ──────────────────────────────────────────────────────────────
 app.get("/api/cases", async (req, res) => {
+  console.log('server side query', req.query)
   try {
     const query = {};
+    // job filter related query
+    if (req.query.search) {
+      query.$or = [
+        { name: { $regex: req.query.search, $options: 'i' } },
+        { bio: { $regex: req.query.search, $options: 'i' } }
+      ]
+    }
+
+    if (req.query.location) {
+      query.location = req.query.location
+    }
+
+    if (req.query.specialization) {
+      query.specialization = req.query.specialization
+    }
+
+    if (req.query.availability) {
+      query.availability = req.query.availability
+    }
+
+   
+
+    // pagination related works
+    if (req.query.page) {
+      const page = req.query.page;
+      const perPage = req.query.perPage || 12;
+      const skipItems = (page - 1) * perPage
+
+      const total = await casesCollection.countDocuments(query);
+      const cursor = casesCollection.find(query).skip(skipItems).limit(perPage);
+      const jobs = await cursor.toArray();
+      return res.send({ total, jobs });
+    }
+
+
+
+
+
+    // company related query
+
     if (req.query.lawfirmId) query.lawfirmId = req.query.lawfirmId;
     if (req.query.lawyerId) query.lawyerId = req.query.lawyerId;
     if (req.query.status) query.status = req.query.status;
@@ -150,6 +202,9 @@ app.get("/api/cases", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch cases" });
   }
 });
+
+
+
 
 app.get("/api/cases/:id", async (req, res) => {
   try {
@@ -191,7 +246,7 @@ app.delete("/api/cases/:id", async (req, res) => {
 
 // ── LAWFIRMS ───────────────────────────────────────────────────────────
 // ✅ Single route — supports optional ?lawyerId= filter
-app.get("/api/lawfirms",verifyToken, verifyAdmin, async (req, res) => {
+app.get("/api/lawfirms", verifyToken, verifyAdmin, async (req, res) => {
   try {
     const query = {};
     if (req.query.lawyerId) query.lawyerId = req.query.lawyerId;
@@ -357,3 +412,38 @@ app.listen(port, () => {
 });
 
 module.exports = app;
+
+// ── CASES ──────────────────────────────────────────────────────────────
+// app.get("/api/cases", async (req, res) => {
+//   try {
+//     const { search, specialization, location, availability, maxFee, lawfirmId, lawyerId, status } = req.query;
+
+//     const query = {};
+
+//     // existing filters
+//     if (lawfirmId) query.lawfirmId = lawfirmId;
+//     if (lawyerId)  query.lawyerId  = lawyerId;
+//     if (status)    query.status    = status;
+
+//     // new search/filter params
+//     if (search) {
+//       query.$or = [
+//         { name:           { $regex: search, $options: "i" } },
+//         { specialization: { $regex: search, $options: "i" } },
+//         { location:       { $regex: search, $options: "i" } },
+//         { bio:            { $regex: search, $options: "i" } },
+//       ];
+//     }
+
+//     if (specialization)  query.specialization  = specialization;
+//     if (location)        query.location        = location;
+//     if (availability)    query.availability    = { $regex: availability, $options: "i" };
+//     if (maxFee)          query.consultationFee = { $lte: Number(maxFee) };
+
+//     const result = await casesCollection.find(query).toArray();
+//     res.json(result);
+//   } catch (err) {
+//     console.error("GET /api/cases error:", err);
+//     res.status(500).json({ error: "Failed to fetch cases" });
+//   }
+// });
