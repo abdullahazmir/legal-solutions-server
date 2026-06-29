@@ -11,7 +11,7 @@ const port = process.env.PORT || 5000;
 
 const allowedOrigins = [
 
-  'http://legal-solutions-client.vercel.app',
+  'https://legal-solutions-client.vercel.app',
   'http://localhost:3000'
 ];
 
