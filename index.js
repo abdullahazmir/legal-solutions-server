@@ -11,7 +11,7 @@ const port = process.env.PORT || 5000;
 
 const allowedOrigins = [
 
-  'https://legal-solutions-client.vercel.app',
+  'http://legal-solutions-client.vercel.app',
   'http://localhost:3000'
 ];
 
@@ -68,11 +68,8 @@ const plansCollection = database.collection("plans");
 const subscriptionCollection = database.collection("subscriptions");
 const sessionCollection = database.collection("session");
 const saveCasesCollection = database.collection("savecases")
+const commentsCollection = database.collection("comments")
 
-db.user.updateMany(
-  { role: "user" },
-  { $set: { role: "client" } }
-)
 
 // verification...................
 
@@ -147,9 +144,23 @@ app.get("/api/users", async (req, res) => {
   }
 });
 
+// in index.js
+app.patch("/api/admin/users/:id/role", verifyToken, verifyAdmin, async (req, res) => {
+    try {
+        const { role } = req.body;
+        const result = await usersCollection.updateOne(
+            { _id: new ObjectId(req.params.id) },
+            { $set: { role } }
+        );
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to update role" });
+    }
+});
+
 // ── CASES ──────────────────────────────────────────────────────────────
 app.get("/api/cases", async (req, res) => {
-  console.log('server side query', req.query)
+  // console.log('server side query', req.query)
   try {
     const query = {};
     // job filter related query
@@ -190,7 +201,7 @@ app.get("/api/cases", async (req, res) => {
 
 
 
-    // company related query
+    // law firm related query
 
     if (req.query.lawfirmId) query.lawfirmId = req.query.lawfirmId;
     if (req.query.lawyerId) query.lawyerId = req.query.lawyerId;
@@ -219,6 +230,35 @@ app.get("/api/cases/:id", async (req, res) => {
   }
 });
 
+// ── USER PROFILE UPDATE ────────────────────────────────────────────────
+app.patch("/api/users/:id", verifyToken, async (req, res) => {
+  try {
+    const { name, photoUrl } = req.body;
+
+    const result = await usersCollection.updateOne(
+      { _id: new ObjectId(req.params.id) },
+      {
+        $set: {
+          name,
+          photoUrl,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({ message: "Profile updated successfully" });
+  } catch (err) {
+    console.error("PATCH /api/users/:id error:", err);
+    res.status(500).json({ error: "Failed to update profile" });
+  }
+});
+
+
+
 app.post("/api/cases", async (req, res) => {
   try {
     const result = await casesCollection.insertOne({
@@ -246,7 +286,7 @@ app.delete("/api/cases/:id", async (req, res) => {
 
 // ── LAWFIRMS ───────────────────────────────────────────────────────────
 // ✅ Single route — supports optional ?lawyerId= filter
-app.get("/api/lawfirms", verifyToken, verifyAdmin, async (req, res) => {
+app.get("/api/lawfirms", verifyToken, async (req, res) => {
   try {
     const query = {};
     if (req.query.lawyerId) query.lawyerId = req.query.lawyerId;
@@ -317,6 +357,59 @@ app.post("/api/applications", async (req, res) => {
   } catch (err) {
     console.error("POST /api/applications error:", err);
     res.status(500).json({ error: "Failed to submit application" });
+  }
+});
+
+// In index.js — replace db.collection with database.collection
+app.post("/api/comments", verifyToken, verifyClient, async (req, res) => {
+  try {
+    const { caseId, caseName, lawyerName, comment, rating, applicationId } = req.body;
+
+    const application = await applicationsCollection.findOne({
+      _id: new ObjectId(applicationId),
+      clientId: req.user._id.toString(),
+      caseId: caseId,
+    });
+
+    if (!application) {
+      return res.status(403).json({ message: "You can only comment on cases you applied to" });
+    }
+
+    const result = await database.collection("comments").insertOne({  // ← database not db
+      caseId,
+      caseName,
+      lawyerName,
+      applicationId,
+      comment,
+      rating: Number(rating),
+      clientId: req.user._id.toString(),
+      clientName: req.user.name,
+      clientEmail: req.user.email,
+      createdAt: new Date(),
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error("POST /api/comments error:", err);
+    res.status(500).json({ error: "Failed to post comment" });
+  }
+});
+
+app.get("/api/comments", async (req, res) => {
+  try {
+    const query = {};
+    if (req.query.caseId)        query.caseId        = req.query.caseId;
+    if (req.query.clientId)      query.clientId      = req.query.clientId;
+    if (req.query.applicationId) query.applicationId = req.query.applicationId;
+
+    const result = await database.collection("comments")  // ← database not db
+      .find(query)
+      .sort({ createdAt: -1 })
+      .toArray();
+    res.json(result);
+  } catch (err) {
+    console.error("GET /api/comments error:", err);
+    res.status(500).json({ error: "Failed to fetch comments" });
   }
 });
 
@@ -413,37 +506,3 @@ app.listen(port, () => {
 
 module.exports = app;
 
-// ── CASES ──────────────────────────────────────────────────────────────
-// app.get("/api/cases", async (req, res) => {
-//   try {
-//     const { search, specialization, location, availability, maxFee, lawfirmId, lawyerId, status } = req.query;
-
-//     const query = {};
-
-//     // existing filters
-//     if (lawfirmId) query.lawfirmId = lawfirmId;
-//     if (lawyerId)  query.lawyerId  = lawyerId;
-//     if (status)    query.status    = status;
-
-//     // new search/filter params
-//     if (search) {
-//       query.$or = [
-//         { name:           { $regex: search, $options: "i" } },
-//         { specialization: { $regex: search, $options: "i" } },
-//         { location:       { $regex: search, $options: "i" } },
-//         { bio:            { $regex: search, $options: "i" } },
-//       ];
-//     }
-
-//     if (specialization)  query.specialization  = specialization;
-//     if (location)        query.location        = location;
-//     if (availability)    query.availability    = { $regex: availability, $options: "i" };
-//     if (maxFee)          query.consultationFee = { $lte: Number(maxFee) };
-
-//     const result = await casesCollection.find(query).toArray();
-//     res.json(result);
-//   } catch (err) {
-//     console.error("GET /api/cases error:", err);
-//     res.status(500).json({ error: "Failed to fetch cases" });
-//   }
-// });
